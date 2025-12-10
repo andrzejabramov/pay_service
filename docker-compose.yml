@@ -1,0 +1,128 @@
+services:
+  pg-master:
+    image: postgres:${POSTGRES_VERSION}
+    container_name: pg-master
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./master/postgresql.conf:/etc/postgresql/postgresql.conf
+      - ./master/pg_hba.conf:/etc/postgresql/pg_hba.conf
+      - ./master/init-master.sh:/docker-entrypoint-initdb.d/init-master.sh
+      - pg_master_:/var/lib/postgresql/data
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    ports:
+      - "${PG_MASTER_PORT}:5432"
+    networks:
+      - backend
+
+  pg-replica:
+    image: postgres:${POSTGRES_VERSION}
+    container_name: pg-replica
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./replica/postgresql.conf:/etc/postgresql/postgresql.conf
+      - ./replica/init-replica.sh:/docker-entrypoint-initdb.d/init-replica.sh
+      - pg_replica_:/var/lib/postgresql/data
+    ports:
+      - "${PG_REPLICA_PORT}:5432"
+    depends_on:
+      - pg-master
+    networks:
+      - bakend
+
+
+    redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - backend
+
+  auth:
+    build: ./auth
+    ports:
+      - "8001:8001"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${PATRONI_SUPERUSER_PASSWORD}
+      POSTGRES_HOST: haproxy          # ← меняется на haproxy
+      POSTGRES_PORT: "5432"           # ← порт записи
+      POSTGRES_DB: ${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_ALGORITHM: HS256
+    depends_on:
+      haproxy:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+
+  users:
+    build: ./users
+    ports:
+      - "8002:8002"
+    environment:
+      DATABASE_WRITE_URL: postgresql://${POSTGRES_USER}:${PATRONI_SUPERUSER_PASSWORD}@haproxy:5432/${POSTGRES_DB}
+      DATABASE_READ_URL: postgresql://${POSTGRES_USER}:${PATRONI_SUPERUSER_PASSWORD}@haproxy:5433/${POSTGRES_DB}
+      RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/
+      REDIS_URL: redis://redis:6379/1
+    depends_on:
+      haproxy:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_started
+    networks:
+      - backend
+
+  webhook:
+    build: ./webhook_2can
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_WRITE_URL: postgresql://${POSTGRES_USER}:${PATRONI_SUPERUSER_PASSWORD}@haproxy:5432/${POSTGRES_DB}
+      DATABASE_READ_URL: postgresql://${POSTGRES_USER}:${PATRONI_SUPERUSER_PASSWORD}@haproxy:5433/${POSTGRES_DB}
+      RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/
+    depends_on:
+      haproxy:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+    networks:
+      - backend
+
+volumes:
+  pg_master_:
+  pg_replica_:
+
+networks:
+  backend:
+    driver: bridge

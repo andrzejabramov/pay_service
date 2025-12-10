@@ -1,0 +1,28 @@
+import json
+from typing import Any, Dict, Optional
+import asyncpg
+
+from src.exceptions.exceptions import ValidationError
+
+
+def maybe_json_dumps(data: Optional[Dict[str, Any]]) -> Optional[str]:
+    """Сериализует dict → JSON-строку или возвращает None."""
+    if data is None:
+        return None
+    return json.dumps(data, ensure_ascii=False)
+
+def maybe_json_loads(s: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Десериализует JSON-строку → dict или возвращает None."""
+    if s is None or s == "":
+        return None
+    if isinstance(s, str):
+        return json.loads(s)
+    # Если вдруг уже dict (на всякий случай)
+    if isinstance(s, dict):
+        return s
+    raise ValidationError("json_input", str(type(s)), f"Expected str or dict, got {type(s)}")
+
+def normalize_user_row(row: asyncpg.Record) -> dict:
+    d = dict(row)
+    d["profile"] = maybe_json_loads(d.get("profile"))
+    return d

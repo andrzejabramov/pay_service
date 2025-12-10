@@ -1,0 +1,56 @@
+from fastapi import APIRouter, Depends, HTTPException, status, Body
+from asyncpg import Pool
+
+from src.services.user_groups import UserGroupService
+from src.exceptions.exceptions import GroupNotFound
+from src.schemas.user_groups import UserGroupCreate, UserGroupUpdate, UserGroupRead
+from src.dependencies.db import get_read_db_pool, get_write_db_pool
+
+
+router = APIRouter(tags=["Accounts / User Groups"])
+
+async def get_service(pool: Pool = Depends(get_read_db_pool)) -> UserGroupService:
+    return UserGroupService(pool)
+
+@router.post("/",
+             response_model=UserGroupRead,
+             status_code=status.HTTP_201_CREATED,
+             operation_id="create_user_group",
+             description="Creates a new group with unique name. The group is active by default.",
+             summary="Create a new user group",
+             )
+async def create_group(group: UserGroupCreate, service: UserGroupService = Depends(get_write_db_pool)):
+    return await service.create(group)
+
+@router.get("/",
+            response_model=list[UserGroupRead],
+            summary="List all user groups",
+            )
+async def list_groups(service: UserGroupService = Depends(get_read_db_pool)):
+    return await service.get_all()
+
+@router.patch("/{group_id}",
+              response_model=UserGroupRead,
+              summary="Update user group fields",
+              description="Partial update. Send only fields you want to change. "
+              "Use GET / to find the group and copy its data if needed.",
+)
+async def update_group(
+    group_id: int,
+    service: UserGroupService = Depends(get_write_db_pool),
+    group_update: UserGroupUpdate = Body(
+        examples=[
+            {
+                "is_active": False
+            },
+            {
+                "name": "Super Admins",
+                "description": "Full system access"
+            }
+        ]
+    )
+):
+    updated = await service.update(group_id, group_update)
+    if not updated:
+        raise GroupNotFound(group_id=str(group_id))
+    return updated
