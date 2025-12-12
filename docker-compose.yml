@@ -1,3 +1,8 @@
+# docker-compose.yml
+# Прямая репликация PostgreSQL: pg-master + pg-replica
+# Мастер: localhost:5435 → pg-master:5432
+# Реплика: localhost:5436 → pg-replica:5432
+
 services:
   pg-master:
     image: postgres:${POSTGRES_VERSION}
@@ -8,16 +13,23 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REPLICATION_USER: ${REPLICATION_USER}
+      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD}
     volumes:
-      - ./master/postgresql.conf:/etc/postgresql/postgresql.conf
-      - ./master/pg_hba.conf:/etc/postgresql/pg_hba.conf
-      - ./master/init-master.sh:/docker-entrypoint-initdb.d/init-master.sh
-      - pg_master_:/var/lib/postgresql/data
+      - ./payment_reply/master/postgresql.conf:/etc/postgresql/postgresql.conf
+      - ./payment_reply/master/pg_hba.conf:/etc/postgresql/pg_hba.conf
+      - ./payment_reply/master/init-master.sh:/docker-entrypoint-initdb.d/init-master.sh
+      - pg_master_data:/var/lib/postgresql/data
     command: postgres -c config_file=/etc/postgresql/postgresql.conf
     ports:
       - "${PG_MASTER_PORT}:5432"
     networks:
       - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   pg-replica:
     image: postgres:${POSTGRES_VERSION}
@@ -28,20 +40,33 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REPLICATION_USER: ${REPLICATION_USER}
+      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD}
     volumes:
-      - ./replica/postgresql.conf:/etc/postgresql/postgresql.conf
-      - ./replica/init-replica.sh:/docker-entrypoint-initdb.d/init-replica.sh
-      - pg_replica_:/var/lib/postgresql/data
+      - ./payment_reply/replica/postgresql.conf:/etc/postgresql/postgresql.conf
+      - ./payment_reply/replica/init-replica.sh:/init-replica.sh
+      - pg_replica_data:/var/lib/postgresql/data
     ports:
       - "${PG_REPLICA_PORT}:5432"
     depends_on:
-      - pg-master
+      pg-master:
+        condition: service_healthy
+    command: >
+      bash -c "
+        chmod +x /init-replica.sh &&
+        /init-replica.sh
+      "
     networks:
-      - bakend
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
-
-    redis:
+  redis:
     image: redis:7-alpine
+    container_name: redis
     ports:
       - "6379:6379"
     networks:
@@ -54,6 +79,7 @@ services:
 
   rabbitmq:
     image: rabbitmq:3.13-management
+    container_name: rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
@@ -64,38 +90,38 @@ services:
       - backend
 
   auth:
-    build: ./auth
+    build:
+      context: ./auth
+      dockerfile: Dockerfile
+    container_name: auth
     ports:
       - "8001:8001"
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${PATRONI_SUPERUSER_PASSWORD}
-      POSTGRES_HOST: haproxy          # ← меняется на haproxy
-      POSTGRES_PORT: "5432"           # ← порт записи
-      POSTGRES_DB: ${POSTGRES_DB}
-      REDIS_URL: redis://redis:6379/0
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
-      JWT_ALGORITHM: HS256
+    env_file:
+      - .env
+      - ./auth/.env
     depends_on:
-      haproxy:
-        condition: service_started
+      pg-master:
+        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
       - backend
 
   users:
-    build: ./users
+    build:
+      context: ./users
+      dockerfile: Dockerfile
+    container_name: users
     ports:
-      - "8002:8002"
-    environment:
-      DATABASE_WRITE_URL: postgresql://${POSTGRES_USER}:${PATRONI_SUPERUSER_PASSWORD}@haproxy:5432/${POSTGRES_DB}
-      DATABASE_READ_URL: postgresql://${POSTGRES_USER}:${PATRONI_SUPERUSER_PASSWORD}@haproxy:5433/${POSTGRES_DB}
-      RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/
-      REDIS_URL: redis://redis:6379/1
+      - "8000:8000"
+    env_file:
+      - .env
+      - ./users/.env
     depends_on:
-      haproxy:
-        condition: service_started
+      pg-master:
+        condition: service_healthy
+      pg-replica:
+        condition: service_healthy
       redis:
         condition: service_healthy
       rabbitmq:
@@ -103,25 +129,27 @@ services:
     networks:
       - backend
 
-  webhook:
-    build: ./webhook_2can
+  webhook_2can:
+    build:
+      context: ./webhook_2can
+      dockerfile: Dockerfile
+    container_name: webhook_2can
     ports:
-      - "8000:8000"
-    environment:
-      DATABASE_WRITE_URL: postgresql://${POSTGRES_USER}:${PATRONI_SUPERUSER_PASSWORD}@haproxy:5432/${POSTGRES_DB}
-      DATABASE_READ_URL: postgresql://${POSTGRES_USER}:${PATRONI_SUPERUSER_PASSWORD}@haproxy:5433/${POSTGRES_DB}
-      RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/
+      - "8002:8002"
+    env_file:
+      - .env
+      - ./webhook_2can/.env
     depends_on:
-      haproxy:
-        condition: service_started
+      pg-master:
+        condition: service_healthy
       rabbitmq:
         condition: service_started
     networks:
       - backend
 
 volumes:
-  pg_master_:
-  pg_replica_:
+  pg_master_data:
+  pg_replica_data:
 
 networks:
   backend:
