@@ -37,6 +37,9 @@ async def list_groups(service: UserGroupService = Depends(get_user_group_service
 
 @router.patch("/{group_id}",
               response_model=UserGroupRead,
+              responses={
+                  404: {"description": "Group not found"},
+              },
               summary="Update user group fields",
               description="Partial update. Send only fields you want to change. "
               "Use GET / to find the group and copy its data if needed.",

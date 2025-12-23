@@ -3,6 +3,7 @@ from typing import List, Optional
 
 from src.utils.json_utils import normalize_user_row, maybe_json_dumps, maybe_json_loads
 from src.schemas.user_groups import UserGroupCreate, UserGroupUpdate, UserGroupRead
+from src.exceptions.exceptions import GroupNotFound
 
 
 class UserGroupService:
@@ -22,7 +23,7 @@ class UserGroupService:
             rows = await conn.fetch(query)
         return [UserGroupRead(**dict(row)) for row in rows]
 
-    async def update(self, group_id: int, group: UserGroupUpdate) -> Optional[UserGroupRead]:
+    async def update(self, group_id: int, group: UserGroupUpdate) -> UserGroupRead:
         query = 'SELECT * FROM accounts.update_user_group($1, $2, $3, $4)'
         async with self.write_pool.acquire() as conn:
             row = await conn.fetchrow(
@@ -32,4 +33,6 @@ class UserGroupService:
                 group.description,  # может быть None
                 group.is_active  # может быть None
             )
-        return UserGroupRead(**dict(row)) if row else None
+        if row is None:  # Явная проверка: если запись не найдена — кидаем исключение
+            raise GroupNotFound(group_id=str(group_id))
+        return UserGroupRead(**dict(row))
