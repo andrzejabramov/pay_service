@@ -9,8 +9,11 @@ from src.dependencies.db import get_read_db_pool, get_write_db_pool
 
 router = APIRouter(tags=["Accounts / User Groups"])
 
-async def get_service(pool: Pool = Depends(get_read_db_pool)) -> UserGroupService:
-    return UserGroupService(pool)
+async def get_user_group_service(
+        read_pool: Pool = Depends(get_read_db_pool),
+        write_pool: Pool = Depends(get_write_db_pool),
+) -> UserGroupService:
+    return UserGroupService(read_pool=read_pool, write_pool=write_pool)
 
 @router.post("/",
              response_model=UserGroupRead,
@@ -19,14 +22,17 @@ async def get_service(pool: Pool = Depends(get_read_db_pool)) -> UserGroupServic
              description="Creates a new group with unique name. The group is active by default.",
              summary="Create a new user group",
              )
-async def create_group(group: UserGroupCreate, service: UserGroupService = Depends(get_write_db_pool)):
+async def create_group(
+        group: UserGroupCreate,
+        service: UserGroupService = Depends(get_user_group_service)
+):
     return await service.create(group)
 
 @router.get("/",
             response_model=list[UserGroupRead],
             summary="List all user groups",
             )
-async def list_groups(service: UserGroupService = Depends(get_read_db_pool)):
+async def list_groups(service: UserGroupService = Depends(get_user_group_service)):
     return await service.get_all()
 
 @router.patch("/{group_id}",
@@ -37,17 +43,21 @@ async def list_groups(service: UserGroupService = Depends(get_read_db_pool)):
 )
 async def update_group(
     group_id: int,
-    service: UserGroupService = Depends(get_write_db_pool),
+    service: UserGroupService = Depends(get_user_group_service),
     group_update: UserGroupUpdate = Body(
-        examples=[
-            {
-                "is_active": False
+        openapi_examples={
+            "deactivate": {
+                "summary": "Deactivated group",
+                "value": {"is_active": False}
             },
-            {
-                "name": "Super Admins",
-                "description": "Full system access"
+            "rename_and_describe": {
+                "summary": "Rename and update description",
+                "value": {
+                    "name": "Admins",
+                    "description": "Full system access"
+                }
             }
-        ]
+        }
     )
 ):
     updated = await service.update(group_id, group_update)
