@@ -7,6 +7,7 @@ from loguru import logger
 from src.middleware.request_id import RequestIDMiddleware
 from src.db.pools import init_pools, close_pools
 from src.routers import webhook as webhook_router
+from src.routers.sbp import router as sbp_router
 from src.logger_config import setup_logger
 from src.exceptions import (
     ValidationError,
@@ -42,6 +43,7 @@ app.add_middleware(RequestIDMiddleware)
 
 # --- Routers ---
 app.include_router(webhook_router.router, prefix="/webhook")
+app.include_router(sbp_router)
 
 
 # --- Exception handlers ---
@@ -50,11 +52,10 @@ async def validation_error_handler(request, exc: ValidationError):
     request_id = request_id_ctx.get()
     logger.warning(
         f"Validation error: {exc.message}",
-        extra={"request_id": request_id, "details": exc.details}
+        extra={"request_id": request_id, "details": exc.details},
     )
     return JSONResponse(
-        status_code=400,
-        content={"detail": exc.message, "details": exc.details}
+        status_code=400, content={"detail": exc.message, "details": exc.details}
     )
 
 
@@ -63,11 +64,10 @@ async def database_error_handler(request, exc: DatabaseError):
     request_id = request_id_ctx.get()
     logger.error(
         f"Database error: {exc.message}",
-        extra={"request_id": request_id, "details": exc.details}
+        extra={"request_id": request_id, "details": exc.details},
     )
     return JSONResponse(
-        status_code=503,
-        content={"detail": "Database operation failed"}
+        status_code=503, content={"detail": "Database operation failed"}
     )
 
 
@@ -76,11 +76,10 @@ async def webhook_processing_error_handler(request, exc: WebhookProcessingError)
     request_id = request_id_ctx.get()
     logger.error(
         f"Processing error: {exc.message}",
-        extra={"request_id": request_id, "details": exc.details}
+        extra={"request_id": request_id, "details": exc.details},
     )
     return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal processing error"}
+        status_code=500, content={"detail": "Internal processing error"}
     )
 
 
@@ -88,16 +87,14 @@ async def webhook_processing_error_handler(request, exc: WebhookProcessingError)
 @app.exception_handler(Exception)
 async def generic_error_handler(request, exc: Exception):
     request_id = request_id_ctx.get()
-    logger.exception(
-        f"Unexpected error: {exc}",
-        extra={"request_id": request_id}
-    )
+    logger.exception(f"Unexpected error: {exc}", extra={"request_id": request_id})
     return JSONResponse(
         status_code=200,  # ← Всегда 200! Банк не должен повторять
-        content={"status": "ok", "message": "Callback accepted (error logged)"}
+        content={"status": "ok", "message": "Callback accepted (error logged)"},
     )
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("src.main:app", host="0.0.0.0", port=8000, reload=True)

@@ -1,4 +1,5 @@
 # alpha_hook/src/services/db_service.py
+
 """
 Сервис для работы с БД
 """
@@ -8,7 +9,7 @@ from asyncpg import Pool, PostgresError
 import json
 import uuid
 
-from src.schemas.webhook import WebhookPayload
+from src.schemas.webhook import AlfaBankCallback  # ← заменили WebhookPayload на AlfaBankCallback
 from src.exceptions.webhook import DatabaseError, ValidationError
 from src.middleware.request_id import request_id_ctx
 
@@ -17,21 +18,11 @@ async def save_webhook_result(
         pool: Pool,
         raw_body: str,
         content_type: str,
-        validated_payload: WebhookPayload | None,
+        validated_payload: AlfaBankCallback | None,  # ← заменили тип
         request_id: str
 ) -> dict:
     """
     Сохраняет результат обработки вебхука в БД.
-
-    Args:
-        pool: пул подключений
-        raw_body: сырое тело запроса
-        content_type: тип контента
-        validated_payload: валидированный payload или None
-        request_id: ID запроса
-
-    Returns:
-        dict: результат от БД
     """
     logger.info(
         "💾 SAVING WEBHOOK TO DATABASE",
@@ -45,7 +36,6 @@ async def save_webhook_result(
 
     try:
         async with pool.acquire() as conn:
-            # Начинаем транзакцию
             async with conn.transaction():
                 logger.debug(
                     "🔄 TRANSACTION STARTED",
@@ -73,6 +63,7 @@ async def save_webhook_result(
                         }
                     )
 
+                    # 👇 Проверьте имя функции в БД!
                     result = await conn.fetchval("""
                         SELECT alpha_hook.save_callback_log(
                             $1::uuid,
@@ -84,7 +75,7 @@ async def save_webhook_result(
 
                 else:
                     # Сохраняем валидный запрос
-                    id_uuid = validated_payload.transaction_uuid
+                    id_uuid = validated_payload.mdOrder  # ← AlfaBankCallback имеет mdOrder
                     status = "pending"
 
                     payload_json = json.dumps(validated_payload.model_dump())

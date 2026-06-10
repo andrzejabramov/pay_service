@@ -1,5 +1,71 @@
+# === Environment & Secrets ===
 .env
+.env.*
+!.env.example
+alpha_hook/.env
+alpha_hook/.env.*
+!alpha_hook/.env.example
+
+# === Certificates & Keys (Никогда не коммитим!) ===
+alpha_hook/certs/
+*.crt
+*.key
+*.pem
+*.p12
+*.pfx
+*.zip
+
+# === Logs ===
+alpha_hook/logs/
+!alpha_hook/logs/.gitkeep
+*.log
+*.log.zip
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.eggs-info/
+*.egg
+MANIFEST
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+
+# === Virtual Environments ===
 .venv/
+venv/
+ENV/
+env/
+
+# === IDE & Editors ===
 .idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+*.sublime-workspace
+
+# === OS Files ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Project Specific (Temp/Untracked) ===
+db_schemas/
+parcing/
+alpha_hook/scripts/
+alpha_hook/test_sbp_getqrcd.py
+dump_project.py
+
+# === Docs & Internal ===
 docs/
 .agentenv/

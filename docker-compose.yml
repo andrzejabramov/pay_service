@@ -99,6 +99,8 @@ services:
     env_file:
       - .env
       - ./auth/.env
+    volumes:
+      - ./alpha_hook/src:/app/src:ro
     depends_on:
       pg-master:
         condition: service_healthy
@@ -162,41 +164,24 @@ services:
         condition: service_started
     env_file:
       - .env
-      - ./alpha_hook/.env  # если будет локальный .env для сервиса
+      - ./alpha_hook/.env
     environment:
-      # PostgreSQL Master (Write) — прямое подключение
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
+      # Явно указываем хосты (они не в .env)
       - POSTGRES_HOST=pg-master
-      - POSTGRES_PORT=5432
-
-      # PostgreSQL Replica (Read) — прямое подключение
       - POSTGRES_REPLICA_HOST=pg-replica
-      - POSTGRES_REPLICA_PORT=5432
-      - APP_READER_USER=${APP_READER_USER}
-      - APP_READER_PASSWORD=${APP_READER_PASSWORD}
-
-      # RabbitMQ
-      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_PORT=5672
-
-      # Alpha Bank
-      - ALPHA_BANK_WEBHOOK_SECRET=${ALPHA_BANK_WEBHOOK_SECRET:-}
-      - ALPHA_BANK_TEST_MODE=${ALPHA_BANK_TEST_MODE:-true}
-
-      # Логирование
-      - LOG_DIR=${ALPHA_HOOK_LOG_DIR:-./logs}
     ports:
-      - "8003:8000"  # Только для локальной разработки!
+      - "8003:8000" # Только для локальной разработки!
+
     volumes:
       - ./alpha_hook/logs:/app/logs
+      - ./alpha_hook/certs:/app/certs:ro
+      - ./alpha_hook/.env:/app/.env:ro
     networks:
       - backend
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8000/webhook/test" ]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/webhook/test"]
       interval: 30s
       timeout: 10s
       retries: 3

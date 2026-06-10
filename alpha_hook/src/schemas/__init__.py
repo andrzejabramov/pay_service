@@ -1,3 +1,3 @@
-from .webhook import WebhookPayload, ApiResponse
+from .webhook import AlfaBankCallback, ApiResponse
 
-__all__ = ["WebhookPayload", "ApiResponse"]
+__all__ = ["AlfaBankCallback", "ApiResponse"]

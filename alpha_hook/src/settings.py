@@ -1,61 +1,57 @@
 # alpha_hook/src/settings.py
 from pydantic_settings import BaseSettings
-from pydantic import ConfigDict, PostgresDsn, AmqpDsn
+from pydantic import ConfigDict, PostgresDsn, AmqpDsn, Field
 from pathlib import Path
 from typing import Optional
 
 
 class Settings(BaseSettings):
     """
-    Настройки приложения.
-
-    ВАЖНО: Секреты (пароли, ключи) НЕ имеют значений по умолчанию.
-    Они должны передаваться ТОЛЬКО через переменные окружения или .env файл.
+    Настройки для alpha_hook сервиса.
+    Переменные берутся из:
+    1. Корневого .env (общие настройки)
+    2. ./alpha_hook/.env (специфичные для сервиса)
     """
 
-    # === PostgreSQL компоненты (загружаются из корневого .env) ===
-    postgres_user: str  # Обязательное, без дефолта!
-    postgres_password: str  # Обязательное, без дефолта!
-    postgres_db: str  # Обязательное, без дефолта!
+    # === PostgreSQL ===
+    # Эти переменные должны быть в корневом .env
+    postgres_user: str
+    postgres_password: str
+    postgres_db: str
+    app_reader_user: str
+    app_reader_password: str
 
-    app_reader_user: str  # Обязательное
-    app_reader_password: str  # Обязательное
-    postgres_replica_host: str = "pg-replica"
-    postgres_replica_port: str = "5432"
+    # Хосты и порты (фиксированы внутри Docker)
+    postgres_host: str = Field("pg-master", alias="POSTGRES_HOST")
+    postgres_port: str = Field("5432", alias="POSTGRES_PORT")
+    postgres_replica_host: str = Field("pg-replica", alias="POSTGRES_REPLICA_HOST")
+    postgres_replica_port: str = Field("5432", alias="POSTGRES_REPLICA_PORT")
 
-    # Хосты и порты (внутри Docker — всегда pg-master:5432)
-    postgres_host: str = "pg-master"
-    postgres_port: str = "5432"
+    # === RabbitMQ ===
+    rabbitmq_default_user: str = Field(alias="RABBITMQ_DEFAULT_USER")
+    rabbitmq_default_pass: str = Field(alias="RABBITMQ_DEFAULT_PASS")
+    rabbitmq_host: str = Field("rabbitmq", alias="RABBITMQ_HOST")
+    rabbitmq_port: str = Field("5672", alias="RABBITMQ_PORT")
 
-    # === RabbitMQ компоненты ===
-    rabbitmq_default_user: str
-    rabbitmq_default_pass: str
-    rabbitmq_host: str = "rabbitmq"
-    rabbitmq_port: str = "5672"
-
-    # === Alpha Bank (публичные настройки) ===
-    alpha_bank_test_mode: bool = True
-
-    # === Секреты Альфа-Банка (ТОЛЬКО из окружения!) ===
-    # None = ключ не настроен, валидация checksum пропускается
-    alpha_bank_webhook_secret: Optional[str] = None
+    # === Alfa Bank ===
+    # Берётся из alpha_hook/.env
+    alfa_secret_key: Optional[str] = Field(None, alias="ALFA_SECRET_KEY")
+    alfa_test_mode: bool = Field(True, alias="ALFA_TEST_MODE")
 
     # === Логирование ===
-    # /app/logs — путь внутри контейнера (проброшен на хост через volume)
-    log_dir: Path = Path("/app/logs")
+    log_dir: Path = Field("/app/logs", alias="LOG_DIR")
 
     # === Строгая валидация ===
     model_config = ConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        extra="ignore",  # Запретить необъявленные переменные
+        extra="ignore",
+        populate_by_name=True,
     )
 
-    # === Производные свойства (не загружаются из env, собираются в коде) ===
-
+    # === Производные свойства ===
     @property
     def database_write_url(self) -> PostgresDsn:
-        """DSN для записи (мастер)"""
         return PostgresDsn.build(
             scheme="postgresql",
             username=self.postgres_user,
@@ -67,19 +63,17 @@ class Settings(BaseSettings):
 
     @property
     def database_read_url(self) -> PostgresDsn:
-        """DSN для чтения (реплика)"""
         return PostgresDsn.build(
             scheme="postgresql",
             username=self.app_reader_user,
             password=self.app_reader_password,
-            host=self.postgres_host,
-            port=int(self.postgres_port),
+            host=self.postgres_replica_host,
+            port=int(self.postgres_replica_port),
             path=self.postgres_db,
         )
 
     @property
     def rabbitmq_url(self) -> AmqpDsn:
-        """DSN для RabbitMQ"""
         return AmqpDsn.build(
             scheme="amqp",
             username=self.rabbitmq_default_user,

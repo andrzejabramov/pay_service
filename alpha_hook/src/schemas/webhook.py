@@ -1,42 +1,33 @@
 # alpha_hook/src/schemas/webhook.py
+"""
+Pydantic схемы для валидации входящих вебхуков от Альфа-Банка
+"""
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional
 import uuid
 
 
-class WebhookPayload(BaseModel):
+class AlfaBankCallback(BaseModel):
     """
     Схема входящего webhook от Альфа-Банка.
-
-    Банк шлёт: application/x-www-form-urlencoded или application/json
-    Поля: mdOrder (UUID), orderNumber (Driver ID), operation, status, checksum, ...
+    Формат: POST, application/x-www-form-urlencoded
     """
-    model_config = ConfigDict(extra="allow")  # разрешить доп. поля от банка
+    model_config = ConfigDict(extra="allow")  # разрешить доп. поля после согласования
 
-    # === Обязательные поля (как шлёт банк) ===
-    orderNumber: str = Field(..., description="ID водителя/терминала из QR-кода")
-    mdOrder: str = Field(..., description="ID транзакции в шлюзе банка (UUID)")
+    # Обязательные поля (из документации)
+    mdOrder: str = Field(..., description="ID транзакции в шлюзе банка")
+    orderNumber: str = Field(..., description="ID заказа/водителя в нашей системе")
     operation: str = Field(..., description="Тип события: deposited, approved, etc.")
-    status: int = Field(..., description="1=успех, 0=ошибка")  # ← int, не str!
-    checksum: str = Field(..., description="Контрольная сумма для валидации")
+    status: int = Field(..., description="1=успех, 0=ошибка")
+    checksum: str = Field(..., description="Контрольная сумма для проверки подлинности")
 
-    # === Опциональные поля (запросить в поддержке) ===
+    # Дополнительные поля (будут добавлены после согласования с поддержкой)
     amount: Optional[int] = Field(None, description="Сумма в копейках")
-    currency: Optional[str] = Field(None, description="Валюта (RUB)")
+    callbackCreationDate: Optional[str] = Field(None, description="Дата создания уведомления")
+    paymentDate: Optional[str] = Field(None, description="Дата оплаты")
     approvalCode: Optional[str] = Field(None, description="Код авторизации")
-    paymentRefNum: Optional[str] = Field(None, description="RRN от эквайера")
-    paymentDate: Optional[str] = Field(None, description="Дата оплаты (ISO 8601)")
-
-    # === Валидаторы ===
-    @field_validator('mdOrder')
-    @classmethod
-    def validate_md_order_uuid(cls, v: str) -> str:
-        """Проверить, что mdOrder — валидный UUID"""
-        try:
-            uuid.UUID(v)
-            return v
-        except ValueError:
-            raise ValueError(f"mdOrder must be a valid UUID, got: {v}")
+    paymentRefNum: Optional[str] = Field(None, description="RRN транзакции")
 
     @field_validator('status')
     @classmethod
@@ -46,11 +37,13 @@ class WebhookPayload(BaseModel):
             raise ValueError(f"status must be 0 or 1, got: {v}")
         return v
 
-    # === Вспомогательные свойства ===
-    @property
-    def amount_rub(self) -> Optional[float]:
-        """Конвертация копеек → рубли"""
-        return self.amount / 100.0 if self.amount else None
+    @field_validator('mdOrder')
+    @classmethod
+    def validate_md_order(cls, v: str) -> str:
+        """Проверить, что mdOrder не пустой (UUID проверим позже, т.к. формат может быть разный)"""
+        if not v or not v.strip():
+            raise ValueError("mdOrder cannot be empty")
+        return v.strip()
 
     @property
     def is_successful_payment(self) -> bool:
@@ -59,16 +52,17 @@ class WebhookPayload(BaseModel):
 
     @property
     def driver_id(self) -> str:
-        """Alias для orderNumber — ваш идентификатор водителя"""
+        """Алиас для orderNumber"""
         return self.orderNumber
 
     @property
-    def transaction_uuid(self) -> uuid.UUID:
-        """Конвертация mdOrder (str) → UUID для сохранения в id_uuid"""
-        return uuid.UUID(self.mdOrder)
+    def amount_rub(self) -> Optional[float]:
+        """Конвертация копеек в рубли"""
+        return self.amount / 100.0 if self.amount else None
 
 
 class ApiResponse(BaseModel):
     """Стандартный ответ API"""
-    status: str
-    message: Optional[str] = None
+    status: str = Field(..., description="Статус обработки")
+    message: str = Field(..., description="Сообщение")
+    request_id: Optional[str] = Field(None, description="ID запроса для трассировки")

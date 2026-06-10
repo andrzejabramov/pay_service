@@ -85,6 +85,9 @@ IGNORE_DIRS = {
     ".vscode",
     "eggs",
     "*.egg-info",
+    "docs",
+    "logs",
+    "tests",
 }
 
 IGNORE_FILES = {
