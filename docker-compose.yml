@@ -99,8 +99,6 @@ services:
     env_file:
       - .env
       - ./auth/.env
-    volumes:
-      - ./alpha_hook/src:/app/src:ro
     depends_on:
       pg-master:
         condition: service_healthy
@@ -191,6 +189,24 @@ services:
       options:
         max-size: "50m"
         max-file: "5"
+
+  contracts:
+    build:
+      context: ./contracts
+      dockerfile: Dockerfile
+    container_name: contracts
+    ports:
+      - "8004:8004"
+    env_file:
+      - .env
+      - ./contracts/.env
+    depends_on:
+      pg-master:
+        condition: service_healthy
+      pg-replica:
+        condition: service_healthy
+    networks:
+      - backend
 
 volumes:
   pg_master_data:

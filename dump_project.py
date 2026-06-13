@@ -30,20 +30,18 @@ OUTPUT_DIR = ROOT / "parcing"
 # =============================================================================
 DEFAULT_TARGET_DIRS = [
     # Сервисы
-    "auth",
-    "users",
-    "webhook_2can",
-    "alpha_hook",  # добавили новый сервис
-
+    # "auth",
+    # "users",
+    # "webhook_2can",
+    # "alpha_hook",
     # Базы данных и SQL
     "sql",
-    "payment_reply",
-
+    "db_schemas",
+    # "payment_reply",
     # Скрипты и утилиты
-    "ai_scripts",
-
+    # "ai_scripts",
     # Документация
-    "docs",
+    # "docs",
 ]
 
 # =============================================================================
@@ -53,21 +51,42 @@ ALLOWED_EXTENSIONS = {
     # Python
     ".py",
     # SQL
-    ".sql", ".sql.template",
+    ".sql",
+    ".sql.template",
     # Конфиги
-    ".yaml", ".yml", ".json", ".toml", ".ini", ".conf", ".env", ".env.example",
+    ".yaml",
+    ".yml",
+    ".json",
+    ".toml",
+    ".ini",
+    ".conf",
+    ".env",
+    ".env.example",
     # Docker
-    "Dockerfile", ".dockerignore",
+    "Dockerfile",
+    ".dockerignore",
     # Shell
-    ".sh", ".bash",
+    ".sh",
+    ".bash",
     # Документация
-    ".md", ".txt", ".rst",
+    ".md",
+    ".txt",
+    ".rst",
     # Web (если есть)
-    ".html", ".css", ".js", ".ts",
+    ".html",
+    ".css",
+    ".js",
+    ".ts",
     # Templates
-    ".j2", ".jinja2", ".html",
+    ".j2",
+    ".jinja2",
+    ".html",
     # Прочее
-    ".gitignore", ".editorconfig", "requirements.txt", "Makefile", "README",
+    ".gitignore",
+    ".editorconfig",
+    "requirements.txt",
+    "Makefile",
+    "README",
 }
 
 # =============================================================================
@@ -125,15 +144,25 @@ IGNORE_FILES = {
 # ФУНКЦИИ
 # =============================================================================
 
+
 def parse_args():
     """Парсинг аргументов командной строки"""
-    parser = argparse.ArgumentParser(description='Дамп проекта или конкретной папки')
-    parser.add_argument('--target', '-t', type=str,
-                       help='Конкретная папка для дампа (например: alpha_hook/src)')
-    parser.add_argument('--output', '-o', type=str,
-                       help='Имя выходного файла (по умолчанию: project_dump_дата_время.txt)')
-    parser.add_argument('--depth', '-d', type=int, default=10,
-                       help='Глубина дерева (по умолчанию: 10)')
+    parser = argparse.ArgumentParser(description="Дамп проекта или конкретной папки")
+    parser.add_argument(
+        "--target",
+        "-t",
+        type=str,
+        help="Конкретная папка для дампа (например: alpha_hook/src)",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=str,
+        help="Имя выходного файла (по умолчанию: project_dump_дата_время.txt)",
+    )
+    parser.add_argument(
+        "--depth", "-d", type=int, default=10, help="Глубина дерева (по умолчанию: 10)"
+    )
     return parser.parse_args()
 
 
@@ -154,7 +183,13 @@ def is_ignored_file(path: Path) -> bool:
     # Проверка по расширению
     if path.suffix and path.suffix not in ALLOWED_EXTENSIONS:
         # Исключение для файлов без расширения (Dockerfile, Makefile, etc.)
-        if path.name not in ["Dockerfile", "Makefile", "README", ".gitignore", ".dockerignore"]:
+        if path.name not in [
+            "Dockerfile",
+            "Makefile",
+            "README",
+            ".gitignore",
+            ".dockerignore",
+        ]:
             return True
 
     # Проверка на вхождение паттернов в путь
@@ -230,14 +265,26 @@ def write_tree_structure(out_handle, root_path: Path, depth: int = 4):
 
     try:
         import subprocess
-        ignore_pattern = "|".join(["__pycache__", "*.pyc", ".git", "node_modules",
-                                    "venv", ".venv", "*.log", "*.logs.zip", "parcing"])
+
+        ignore_pattern = "|".join(
+            [
+                "__pycache__",
+                "*.pyc",
+                ".git",
+                "node_modules",
+                "venv",
+                ".venv",
+                "*.log",
+                "*.logs.zip",
+                "parcing",
+            ]
+        )
         result = subprocess.run(
             ["tree", "-L", str(depth), "-I", ignore_pattern],
             cwd=root_path,
             capture_output=True,
             text=True,
-            errors="ignore"
+            errors="ignore",
         )
         out_handle.write(result.stdout)
     except FileNotFoundError:
@@ -280,9 +327,9 @@ def main():
     if args.output:
         output_file = OUTPUT_DIR / args.output
     else:
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         if args.target:
-            target_name = args.target.replace('/', '_')
+            target_name = args.target.replace("/", "_")
             output_file = OUTPUT_DIR / f"dump_{target_name}_{timestamp}.txt"
         else:
             output_file = OUTPUT_DIR / f"project_dump_{timestamp}.txt"
@@ -315,7 +362,9 @@ def main():
 
         # Структура проекта
         print("Generating project structure...")
-        write_tree_structure(out, ROOT if not args.target else Path(args.target), args.depth)
+        write_tree_structure(
+            out, ROOT if not args.target else Path(args.target), args.depth
+        )
 
         if args.target:
             # Дамп конкретной папки

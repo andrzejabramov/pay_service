@@ -6,8 +6,10 @@ from loguru import logger
 
 from src.middleware.request_id import RequestIDMiddleware
 from src.db.pools import init_pools, close_pools
-from src.routers import webhook as webhook_router
 from src.routers.sbp import router as sbp_router
+from src.routers.webhook import router as webhook_router
+from src.routers.merchant_profiles import router as merchant_profiles_router
+
 from src.logger_config import setup_logger
 from src.exceptions import (
     ValidationError,
@@ -42,8 +44,9 @@ app = FastAPI(
 app.add_middleware(RequestIDMiddleware)
 
 # --- Routers ---
-app.include_router(webhook_router.router, prefix="/webhook")
-app.include_router(sbp_router)
+app.include_router(webhook_router, prefix="/webhook")
+app.include_router(sbp_router, prefix="/api/v1")
+app.include_router(merchant_profiles_router, prefix="/api/v1")
 
 
 # --- Exception handlers ---

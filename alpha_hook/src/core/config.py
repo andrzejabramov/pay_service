@@ -1,5 +1,11 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
+from dotenv import load_dotenv
+from pathlib import Path
+
+root_env = Path(__file__).parent.parent.parent / ".env"  # путь до pay_services/.env
+if root_env.exists():
+    load_dotenv(root_env)
 
 
 class Settings(BaseSettings):
@@ -8,6 +14,8 @@ class Settings(BaseSettings):
     APP_PORT: int = 8000
     LOG_LEVEL: str = "INFO"
     ENVIRONMENT: str = "development"  # development | staging | production
+    JWT_SECRET_KEY: str
+    JWT_ALGORITHM: str = "HS256"
 
     # === Database (через PgBouncer - write pool) ===
     DB_HOST: str = "pgbouncer"  # Или localhost для локальной разработки
