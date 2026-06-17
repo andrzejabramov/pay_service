@@ -7,6 +7,9 @@ from src.middleware.request_id import RequestIDMiddleware
 from src.middleware.logging import LoggingMiddleware
 from src.db.pools import init_pools, close_pools
 from src.routers.organisations import router as organisations_router
+from src.routers.tariffs import router as tariffs_router
+from src.routers.communications import router as communications_router
+from src.routers.payments import router as payments_router
 from src.routers.services import router as services_router
 from src.logger_config import setup_logger
 from src.core.handlers import register_exception_handlers
@@ -44,6 +47,11 @@ app.include_router(
     organisations_router, prefix="/organisations", tags=["Organisations"]
 )
 app.include_router(services_router, prefix="/services", tags=["Services"])
+app.include_router(tariffs_router, prefix="/tariffs", tags=["Tariffs"])
+app.include_router(
+    communications_router, prefix="/communications", tags=["Communications"]
+)
+app.include_router(payments_router, prefix="/payments", tags=["Payments"])
 
 
 if __name__ == "__main__":

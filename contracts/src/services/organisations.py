@@ -17,7 +17,7 @@ class OrganisationService:
         requisites_json = maybe_json_dumps(data.requisites.model_dump())
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT * FROM common.create_organisation($1, $2::jsonb)",
+                "SELECT * FROM organisations.create_organisation($1, $2::jsonb)",
                 data.name_org,
                 requisites_json,
             )
@@ -26,13 +26,13 @@ class OrganisationService:
     async def get_by_id(self, org_id: str) -> OrganisationRead:
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT * FROM common.get_organisation_by_id($1::uuid)", org_id
+                "SELECT * FROM organisations.get_organisation_by_id($1::uuid)", org_id
             )
         return self._to_read(row)
 
     async def list_all(self) -> List[OrganisationRead]:
         async with self.pool.acquire() as conn:
-            rows = await conn.fetch("SELECT * FROM common.list_organisations()")
+            rows = await conn.fetch("SELECT * FROM organisations.list_organisations()")
         return [self._to_read(row) for row in rows]
 
     async def update(self, org_id: str, data: OrganisationUpdate) -> OrganisationRead:
@@ -41,7 +41,7 @@ class OrganisationService:
         )
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT * FROM common.update_organisation($1::uuid, $2, $3::jsonb)",
+                "SELECT * FROM organisations.update_organisation($1::uuid, $2, $3::jsonb)",
                 org_id,
                 data.name_org,
                 requisites_json,
@@ -50,7 +50,9 @@ class OrganisationService:
 
     async def delete(self, org_id: str) -> None:
         async with self.pool.acquire() as conn:
-            await conn.execute("SELECT common.delete_organisation($1::uuid)", org_id)
+            await conn.execute(
+                "SELECT organisations.delete_organisation($1::uuid)", org_id
+            )
 
     @staticmethod
     def _to_read(row) -> OrganisationRead:

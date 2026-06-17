@@ -13,7 +13,7 @@ class ServiceCrudService:
         settings_json = maybe_json_dumps(data.settings) if data.settings else None
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT * FROM common.create_service($1, $2, $3, $4, $5::jsonb)",
+                "SELECT * FROM services.create_service($1, $2, $3, $4, $5::jsonb)",
                 data.name,
                 data.code,
                 data.category,
@@ -25,7 +25,7 @@ class ServiceCrudService:
     async def get_by_id(self, service_id: str) -> ServiceRead:
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT * FROM common.get_service_by_id($1::uuid)", service_id
+                "SELECT * FROM services.get_service_by_id($1::uuid)", service_id
             )
         return self._to_read(row)
 
@@ -34,7 +34,7 @@ class ServiceCrudService:
     ) -> List[ServiceRead]:
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT * FROM common.list_services($1, $2)", only_active, category
+                "SELECT * FROM services.list_services($1, $2)", only_active, category
             )
         return [self._to_read(row) for row in rows]
 
@@ -42,7 +42,7 @@ class ServiceCrudService:
         settings_json = maybe_json_dumps(data.settings) if data.settings else None
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT * FROM common.update_service($1::uuid, $2, $3, $4, $5, $6::jsonb, $7)",
+                "SELECT * FROM services.update_service($1::uuid, $2, $3, $4, $5, $6::jsonb, $7)",
                 service_id,
                 data.name,
                 data.code,
@@ -56,7 +56,7 @@ class ServiceCrudService:
     async def deactivate(self, service_id: str) -> ServiceRead:
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT * FROM common.deactivate_service($1::uuid)", service_id
+                "SELECT * FROM services.deactivate_service($1::uuid)", service_id
             )
         return self._to_read(row)
 

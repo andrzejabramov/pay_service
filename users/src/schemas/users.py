@@ -32,6 +32,22 @@ class UserReadExtended(UserRead):
     contacts: Dict[str, str] = Field(default_factory=dict)
     groups: List[str] = Field(default_factory=list)
 
+    @field_validator("contacts", mode="before")
+    @classmethod
+    def validate_contacts(cls, v):
+        if v is None or not isinstance(v, dict):
+            return {}
+        return v
+
+    @field_validator("groups", mode="before")
+    @classmethod
+    def validate_groups(cls, v):
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return [str(g) for g in v if g is not None]
+        return []
+
 
 class BulkUserItem(BaseModel):
     phone: str

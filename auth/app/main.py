@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.middleware.request_id import RequestIDMiddleware
 from app.middleware.logging import LoggingMiddleware
@@ -27,15 +28,19 @@ async def lifespan(app: FastAPI):
     await close_redis_client()
     await close_pool()
 
-app = FastAPI(
-    title="Auth Service",
-    lifespan=lifespan
-)
+
+app = FastAPI(title="Auth Service", lifespan=lifespan)
+
 
 # ← Добавить обработчики
 @app.exception_handler(BaseAPIException)
 async def base_api_exception_handler(request, exc: BaseAPIException):
-    return exc  # BaseAPIException наследуется от HTTPException → FastAPI сам сериализует
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=getattr(exc, "headers", None),
+    )
+
 
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(LoggingMiddleware)
@@ -52,4 +57,5 @@ app.include_router(auth_router, prefix="/api/v1/auth")
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("app.main:app", host="0.0.0.0", port=8001, reload=True)

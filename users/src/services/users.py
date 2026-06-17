@@ -155,7 +155,16 @@ class UserService:
             d = dict(row)
             # profile может быть JSONB → приводим к dict
             d["profile"] = maybe_json_loads(d.get("profile"))
-            # contacts и groups уже приходят в правильном формате из БД
+
+            # ✅ ЗАЩИТА: contacts из БД может быть None (если у юзера нет контактов)
+            # Pydantic ожидает Dict[str, str], поэтому None вызывает dict_type error
+            if not isinstance(d.get("contacts"), dict):
+                d["contacts"] = {}
+
+            # ✅ ЗАЩИТА: groups может быть None
+            if not isinstance(d.get("groups"), list):
+                d["groups"] = []
+
             items.append(UserReadExtended(**d))
 
         pages = (total + size - 1) // size

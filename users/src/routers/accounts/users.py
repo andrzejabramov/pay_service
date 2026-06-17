@@ -20,7 +20,7 @@ from src.services.users import (
 from src.db.redis import redis
 from src.cashe.user_cashe import (
     get_user_by_identifier_cached,
-)  # ← ДОБАВЛЕНО: импорт кэш-функции
+)
 from src.utils.json_utils import maybe_json_loads, maybe_json_dumps
 from src.dependencies.db import get_read_db_pool, get_write_db_pool
 from src.dependencies.upload import validate_upload_file
@@ -39,13 +39,20 @@ from src.schemas.users import (
 router = APIRouter(tags=["Accounts: Users"])
 
 
-async def get_user_service(pool: Pool = Depends(get_read_db_pool)) -> UserService:
+# ✅ Отдельные фабрики для read и write
+async def get_read_user_service(pool: Pool = Depends(get_read_db_pool)) -> UserService:
+    return UserService(pool)
+
+
+async def get_write_user_service(
+    pool: Pool = Depends(get_write_db_pool),
+) -> UserService:
     return UserService(pool)
 
 
 @router.post("/", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 async def create_user(
-    user: UserCreate, service: UserService = Depends(get_write_db_pool)
+    user: UserCreate, service: UserService = Depends(get_write_user_service)
 ):
     return await service.create(user)
 
@@ -54,7 +61,7 @@ async def create_user(
 async def get_user_list(
     page: int = Query(1, ge=1, description="Номер страницы"),
     size: int = Query(50, ge=1, le=100, description="Размер страницы (макс. 100)"),
-    service: UserService = Depends(get_read_db_pool),
+    service: UserService = Depends(get_read_user_service),
 ):
     return await service.get_paginated(page=page, size=size)
 
@@ -65,40 +72,32 @@ async def update_user(
     user_update: UserUpdate = Body(
         examples=[{"is_active": False, "profile": {"key": "value"}}]
     ),
-    service: UserService = Depends(
-        lambda pool=Depends(get_write_db_pool): UserService(pool)
-    ),
+    service: UserService = Depends(get_write_user_service),
 ):
     return await service.update(
         user_id=user_id,
-        profile=user_update.profile,  # ← dict или None
-        is_active=user_update.is_active,  # ← bool или None
+        profile=user_update.profile,
+        is_active=user_update.is_active,
     )
 
 
 @router.post("/bulk", response_model=BulkCreateResult)
 async def bulk_create_users(
     request: BulkCreateRequest,
-    service: UserService = Depends(get_write_db_pool),
+    service: UserService = Depends(get_write_user_service),
 ):
     try:
         result = await service.bulk_create_users(
             interface=request.interface, users=request.users
         )
-        return result  # ← ИСПРАВЛЕНО: теперь возвращаем результат
+        return result
     except ValueError as e:
         raise ValidationError("bulk_create", "users", str(e))
 
 
 @router.post("/bulk/upload", response_model=UploadResult)
 async def bulk_create_users_upload(file: UploadFile = Depends(validate_upload_file)):
-    """
-    Загружает файл с колонками: phone, user_groups.
-    Пример user_groups: "client,driver" (через запятую).
-    """
-    return await bulk_create_users_from_file(
-        file
-    )  # ← ИСПРАВЛЕНО: используем существующую функцию
+    return await bulk_create_users_from_file(file)
 
 
 @router.get("/by-identifier", response_model=UserDetailRead)
@@ -111,10 +110,4 @@ async def get_user_by_identifier(
     ),
     pool: Pool = Depends(get_read_db_pool),
 ):
-    """
-    Получает пользователя по идентификатору (UUID, email, phone или second_login).
-    Использует кэширование для ускорения повторных запросов.
-    """
-    return await get_user_by_identifier_cached(
-        identifier, pool
-    )  # ← ИСПРАВЛЕНО: используем кэш-функцию
+    return await get_user_by_identifier_cached(identifier, pool)
